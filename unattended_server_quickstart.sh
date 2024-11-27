@@ -36,9 +36,30 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-echo "Updating package lists and installing unattended-upgrades package"
+echo "Updating package lists"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update && apt-get install -y unattended-upgrades
+apt-get update
+
+echo "Installing and configuring NTP for time synchronization"
+apt-get install -y systemd-timesyncd
+check_error "Failed to install systemd-timesyncd"
+
+# Enable and start the time sync service
+systemctl enable systemd-timesyncd
+systemctl start systemd-timesyncd
+check_error "Failed to enable/start systemd-timesyncd service"
+
+# Verify time sync is working
+timedatectl set-ntp true
+check_error "Failed to enable NTP synchronization"
+
+echo "Time synchronization (NTP) is now configured and running"
+
+
+# note: it is important to setup unattended upgrades at the end
+# otherwise, the apt lock during upgrades will cause the above apt installs to fail
+echo "Installing unattended-upgrades package"
+apt-get install -y unattended-upgrades
 check_error "Failed to install unattended-upgrades"
 
 echo "Configuring unattended-upgrades in $CONFIG_FILE"
@@ -116,18 +137,3 @@ check_error "Failed to enable/restart unattended-upgrades service"
 
 echo "Unattended-upgrades service is now running and configured"
 
-
-echo "Installing and configuring NTP for time synchronization"
-apt-get install -y systemd-timesyncd
-check_error "Failed to install systemd-timesyncd"
-
-# Enable and start the time sync service
-systemctl enable systemd-timesyncd
-systemctl start systemd-timesyncd
-check_error "Failed to enable/start systemd-timesyncd service"
-
-# Verify time sync is working
-timedatectl set-ntp true
-check_error "Failed to enable NTP synchronization"
-
-echo "Time synchronization (NTP) is now configured and running"

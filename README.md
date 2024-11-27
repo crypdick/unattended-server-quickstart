@@ -9,8 +9,11 @@ It does the following:
 
 
 ## Quick Start
+
 Run this command as root:
 
 ```bash
 curl -s https://raw.githubusercontent.com/crypdick/unattended-server-quickstart/main/unattended_server_quickstart.sh | sudo bash
 ```
+
+Alternatively, you can download the file manually and run it in the terminal.

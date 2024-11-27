@@ -69,6 +69,7 @@ cp "$CONFIG_FILE" "${CONFIG_FILE}.backup"
 check_error "Failed to create backup"
 
 # Function to uncomment and set configuration
+# uses grep for fuzzy search to make script more robust
 configure_setting() {
     local pattern="$1"
     local replacement="$2"
@@ -91,7 +92,8 @@ configure_setting 'Unattended-Upgrade::Automatic-Reboot' 'Unattended-Upgrade::Au
 configure_setting 'Unattended-Upgrade::SyslogEnable' 'Unattended-Upgrade::SyslogEnable "true";'
 configure_setting 'Unattended-Upgrade::AutoFixInterruptedDpkg' 'Unattended-Upgrade::AutoFixInterruptedDpkg "true";'
 configure_setting 'Unattended-Upgrade::MinimalSteps' 'Unattended-Upgrade::MinimalSteps "true";'
-configure_setting 'Unattended-Upgrade::Automatic-Reboot-WithUsers' 'Unattended-Upgrade::Automatic-Reboot-WithUsers "true";'
+# Do not reboot is a user is logged in
+configure_setting 'Unattended-Upgrade::Automatic-Reboot-WithUsers' 'Unattended-Upgrade::Automatic-Reboot-WithUsers "false";'
 
 # Enable all security updates in Allowed-Origins
 # create a temp .origins file

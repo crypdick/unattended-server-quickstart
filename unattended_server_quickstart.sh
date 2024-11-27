@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo "Starting setup of unattended server"
+
+# makes whole script fail if any individual cmds fail
 set -euo pipefail
 
 LOGFILE="/var/log/unattended_setup.log"

@@ -10,32 +10,35 @@ exec 1> >(tee -a "$LOGFILE") 2>&1
 
 # Add trap for cleanup
 trap 'cleanup' EXIT
+SCRIPT_SUCCESS=true
 cleanup() {
     rm -f "${CONFIG_FILE}.origins"
-    if [ $? -ne 0 ]; then
+    if [ "$SCRIPT_SUCCESS" = false ]; then
         echo "Setup failed. Check $LOGFILE for details"
         exit 1
     fi
-    echo "Setup completed successfully. Check $LOG for details"
+    echo "Setup completed successfully. Check $LOGFILE for details"
+}
 
 CONFIG_FILE="/etc/apt/apt.conf.d/50unattended-upgrades"
 
-# Function to check if command succeeded
 check_error() {
     if [ $? -ne 0 ]; then
         echo "Error: $1"
+        SCRIPT_SUCCESS=false
         exit 1
     fi
 }
 
-# Check if running as root
+
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root"
     exit 1
 fi
 
 echo "Updating package lists and installing unattended-upgrades package"
-apt update && apt install -y unattended-upgrades
+export DEBIAN_FRONTEND=noninteractive
+apt-get update && apt-get install -y unattended-upgrades
 check_error "Failed to install unattended-upgrades"
 
 echo "Configuring unattended-upgrades in $CONFIG_FILE"
@@ -70,28 +73,38 @@ configure_setting 'Unattended-Upgrade::MinimalSteps' 'Unattended-Upgrade::Minima
 configure_setting 'Unattended-Upgrade::Automatic-Reboot-WithUsers' 'Unattended-Upgrade::Automatic-Reboot-WithUsers "true";'
 
 # Enable all security updates in Allowed-Origins
-{
-    echo 'Unattended-Upgrade::Allowed-Origins {
-	"${distro_id}:${distro_codename}";
-	"${distro_id}:${distro_codename}-security";
-	\/\/ Extended Security Maintenance; doesn't necessarily exist for
-	\/\/ every release and this system may not have it installed, but if
-	\/\/ available, the policy for updates is such that unattended-upgrades
-	\/\/ should also install from here by default.
-	"${distro_id}ESMApps:${distro_codename}-apps-security";
-	"${distro_id}ESM:${distro_codename}-infra-security";
-	"${distro_id}:${distro_codename}-updates";
-	\/\/ Uncomment the following lines to enable automatic upgrades from proposed and backports
-	\/\/"${distro_id}:${distro_codename}-proposed";
-	\/\/"${distro_id}:${distro_codename}-backports";
-};' 
-} > "${CONFIG_FILE}.origins"
+# create a temp .origins file
+TEMP_ORIGINS=$(mktemp /tmp/unattended-origins.XXXXXX)
+cat > "$TEMP_ORIGINS" << 'EOL'
+Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}";
+        "${distro_id}:${distro_codename}-security";
+        // Extended Security Maintenance; doesn't necessarily exist for
+        // every release and this system may not have it installed, but if
+        // available, the policy for updates is such that unattended-upgrades
+        // should also install from here by default.
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+        "${distro_id}:${distro_codename}-updates";
+        // Uncomment the following lines to enable automatic upgrades from proposed and backports
+        //"${distro_id}:${distro_codename}-proposed";
+        //"${distro_id}:${distro_codename}-backports";
+};
+EOL
 check_error "Failed to create origins file"
 
-# Replace the Allowed-Origins section
-sed -i '/^Unattended-Upgrade::Allowed-Origins {/,/^};/!b;r '${CONFIG_FILE}.origins'' "$CONFIG_FILE"
+# Use temp origins file to replace the Allowed-Origins section
+TEMP_CONFIG=$(mktemp /tmp/unattended-config.XXXXXX)
+awk '
+    /^Unattended-Upgrade::Allowed-Origins {/,/^};/ { next }
+    { print }
+' "$CONFIG_FILE" > "$TEMP_CONFIG"
+cat "$TEMP_ORIGINS" >> "$TEMP_CONFIG"
+mv "$TEMP_CONFIG" "$CONFIG_FILE"
 check_error "Failed to update Allowed-Origins"
-rm "${CONFIG_FILE}.origins"
+
+# Clean up temp files
+rm -f "$TEMP_ORIGINS" "$TEMP_CONFIG"
 
 echo "Configuration of unattended-upgrades complete"
 echo "Original configuration backed up to ${CONFIG_FILE}.backup"
@@ -105,7 +118,7 @@ echo "Unattended-upgrades service is now running and configured"
 
 
 echo "Installing and configuring NTP for time synchronization"
-apt install -y systemd-timesyncd
+apt-get install -y systemd-timesyncd
 check_error "Failed to install systemd-timesyncd"
 
 # Enable and start the time sync service
